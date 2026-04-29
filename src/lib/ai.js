@@ -55,3 +55,59 @@ export async function generateReviews(businessName, keywords, rating, tone = 'fr
     ];
   }
 }
+
+export async function generateReply(reviewText, options = {}) {
+  const apiKey = import.meta.env.VITE_GROQ_API_KEY;
+  const { tone = 'professional', brandName = 'ReviewBoost AI' } = options;
+  
+  const prompt = `
+    You are a professional reputation manager for "${brandName}". 
+    Write 3 distinct, professional, and empathetic responses to the following customer review:
+    
+    "${reviewText}"
+    
+    The tone should be ${tone}. If the review is negative, be apologetic and offer to make it right. If it's positive, be grateful and encouraging.
+    
+    Output strictly as a JSON object with a single key "replies" containing an array of strings. Do not output any other text or markdown.
+    Example: { "replies": ["reply 1", "reply 2", "reply 3"] }
+  `;
+
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "llama3-8b-8192",
+        messages: [
+          { role: "system", content: "You are a helpful assistant that strictly outputs JSON objects." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text = data.choices[0].message.content;
+    const parsed = JSON.parse(text);
+    
+    return parsed.replies || [
+      "Thank you for your feedback! We're glad you enjoyed your visit.",
+      "We appreciate you taking the time to share your thoughts. Hope to see you again!",
+      "Thanks for the support! We'll keep working hard to provide great service."
+    ];
+
+  } catch (error) {
+    console.error("Error generating reply with Groq:", error);
+    return [
+      "Thank you for your feedback! We're glad you enjoyed your visit.",
+      "We appreciate you taking the time to share your thoughts. Hope to see you again!",
+      "Thanks for the support! We'll keep working hard to provide great service."
+    ];
+  }
+}
